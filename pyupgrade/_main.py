@@ -35,8 +35,8 @@ from pyupgrade._string_helpers import is_codec
 from pyupgrade._token_helpers import CLOSING
 from pyupgrade._token_helpers import KEYWORDS
 from pyupgrade._token_helpers import OPENING
+from pyupgrade._token_helpers import parse_call_args
 from pyupgrade._token_helpers import remove_brace
-from pyupgrade._token_helpers import victims
 
 DotFormatPart = Tuple[str, Optional[str], Optional[str], Optional[str]]
 
@@ -705,8 +705,28 @@ def _unparse(node: ast.expr) -> str:
         raise NotImplementedError(ast.dump(node))
 
 
-def _to_fstring(src: str, call: ast.Call) -> str:
-    params = _format_params(call)
+def _skip_unimportant_ws(tokens: List[Token], i: int) -> int:
+    while tokens[i].name == 'UNIMPORTANT_WS':
+        i += 1
+    return i
+
+
+def _to_fstring(
+    src: str, tokens: List[Token], args: List[Tuple[int, int]],
+) -> str:
+    params = {}
+    i = 0
+    for start, end in args:
+        start = _skip_unimportant_ws(tokens, start)
+        if tokens[start].name == 'NAME':
+            after = _skip_unimportant_ws(tokens, start + 1)
+            if tokens[after].src == '=':  # keyword argument
+                params[tokens[start].src] = tokens_to_src(
+                    tokens[after + 1:end],
+                ).strip()
+                continue
+        params[str(i)] = tokens_to_src(tokens[start:end]).strip()
+        i += 1
 
     parts = []
     i = 0
@@ -765,8 +785,6 @@ def _fix_py36_plus(contents_text: str) -> str:
         return contents_text
     for i, token in reversed_enumerate(tokens):
         if token.offset in visitor.fstrings:
-            node = visitor.fstrings[token.offset]
-
             # TODO: handle \N escape sequences
             if r'\N' in token.src:
                 continue
@@ -775,15 +793,15 @@ def _fix_py36_plus(contents_text: str) -> str:
             if tokens_to_src(tokens[i + 1:paren + 1]) != '.format(':
                 continue
 
-            # we don't actually care about arg position, so we pass `node`
-            fmt_victims = victims(tokens, paren, node, gen=False)
-            end = fmt_victims.ends[-1]
+            args, end = parse_call_args(tokens, paren)
             # if it spans more than one line, bail
-            if tokens[end].line != token.line:
+            if tokens[end - 1].line != token.line:
                 continue
 
-            tokens[i] = token._replace(src=_to_fstring(token.src, node))
-            del tokens[i + 1:end + 1]
+            tokens[i] = token._replace(
+                src=_to_fstring(token.src, tokens, args),
+            )
+            del tokens[i + 1:end]
         elif token.offset in visitor.named_tuples and token.name == 'NAME':
             call = visitor.named_tuples[token.offset]
             types: Dict[str, ast.expr] = {

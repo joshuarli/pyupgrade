@@ -522,14 +522,14 @@ def _simple_arg(arg: ast.expr) -> bool:
     )
 
 
-def _format_params(call: ast.Call) -> Dict[str, str]:
-    params = {}
+def _format_params(call: ast.Call) -> Set[str]:
+    params = set()
     for i, arg in enumerate(call.args):
-        params[str(i)] = _unparse(arg)
+        params.add(str(i))
     for kwd in call.keywords:
         # kwd.arg can't be None here because we exclude starargs
         assert kwd.arg is not None
-        params[kwd.arg] = _unparse(kwd.value)
+        params.add(kwd.arg)
     return params
 
 
@@ -676,8 +676,6 @@ def _unparse(node: ast.expr) -> str:
         return node.id
     elif isinstance(node, ast.Attribute):
         return ''.join((_unparse(node.value), '.', node.attr))
-    elif isinstance(node, ast.Call):
-        return '{}()'.format(_unparse(node.func))
     elif isinstance(node, ast.Subscript):
         if sys.version_info >= (3, 9):  # pragma: no cover (py39+)
             node_slice: ast.expr = node.slice

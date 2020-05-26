@@ -510,18 +510,6 @@ def _fix_tokens(contents_text: str, min_version: Version) -> str:
     return tokens_to_src(tokens).lstrip()
 
 
-def _simple_arg(arg: ast.expr) -> bool:
-    return (
-        isinstance(arg, ast.Name) or
-        (isinstance(arg, ast.Attribute) and _simple_arg(arg.value)) or
-        (
-            isinstance(arg, ast.Call) and
-            _simple_arg(arg.func) and
-            not arg.args and not arg.keywords
-        )
-    )
-
-
 def _format_params(call: ast.Call) -> Set[str]:
     params = set()
     for i, arg in enumerate(call.args):
@@ -568,8 +556,6 @@ class FindPy36Plus(ast.NodeVisitor):
                 isinstance(node.func, ast.Attribute) and
                 isinstance(node.func.value, ast.Str) and
                 node.func.attr == 'format' and
-                all(_simple_arg(arg) for arg in node.args) and
-                all(_simple_arg(k.value) for k in node.keywords) and
                 not has_starargs(node)
         ):
             return None
@@ -794,6 +780,10 @@ def _fix_py36_plus(contents_text: str) -> str:
             args, end = parse_call_args(tokens, paren)
             # if it spans more than one line, bail
             if tokens[end - 1].line != token.line:
+                continue
+
+            args_src = tokens_to_src(tokens[paren:end])
+            if '\\' in args_src or '"' in args_src or "'" in args_src:
                 continue
 
             tokens[i] = token._replace(

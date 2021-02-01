@@ -65,15 +65,25 @@ def parse_format(s: str) -> Tuple[DotFormatPart, ...]:
 def unparse_parsed_string(parsed: Sequence[DotFormatPart]) -> str:
     def _convert_tup(tup: DotFormatPart) -> str:
         ret, field_name, format_spec, conversion = tup
+
         ret = ret.replace('{', '{{')
         ret = ret.replace('}', '}}')
+
+        breakpoint()
+        terrible_string_inlining_hack = False
+
         if field_name is not None:
-            ret += '{' + field_name
+            if "'" in field_name:
+                terrible_string_inlining_hack = True
+                field_name = field_name.replace("'", "")
+
+            ret += field_name
             if conversion:
                 ret += '!' + conversion
             if format_spec:
                 ret += ':' + format_spec
-            ret += '}'
+        if not terrible_string_inlining_hack:
+            return "{" + ret + "}"
         return ret
 
     return ''.join(_convert_tup(tup) for tup in parsed)
@@ -519,8 +529,9 @@ def _fix_tokens(contents_text: str, min_version: Version) -> str:
 
 
 def _simple_arg(arg: ast.expr) -> bool:
-    return (
+    verdict = (
         isinstance(arg, ast.Name) or
+        isinstance(arg, ast.Str) or
         (isinstance(arg, ast.Attribute) and _simple_arg(arg.value)) or
         (
             isinstance(arg, ast.Call) and
@@ -528,6 +539,10 @@ def _simple_arg(arg: ast.expr) -> bool:
             not arg.args and not arg.keywords
         )
     )
+#    if not verdict:
+#        pass
+#        breakpoint()
+    return verdict
 
 
 def _format_params(call: ast.Call) -> Dict[str, str]:
@@ -709,6 +724,7 @@ def _unparse(node: ast.expr) -> str:
             slice_s = _unparse(node_slice)
         return '{}[{}]'.format(_unparse(node.value), slice_s)
     elif isinstance(node, ast.Str):
+        # terrible hack to have removed repr() - we should guard this with my custom fstring stuff
         return repr(node.s)
     elif isinstance(node, ast.Ellipsis):
         return '...'
@@ -722,6 +738,8 @@ def _unparse(node: ast.expr) -> str:
 
 def _to_fstring(src: str, call: ast.Call) -> str:
     params = _format_params(call)
+    # ok if we still repr strings here it'll have single quotes {'0': "'Resolved'", '1': 'alert_rule.name'}
+    # breakpoint()
 
     parts = []
     i = 0

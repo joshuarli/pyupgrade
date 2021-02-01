@@ -46,6 +46,11 @@ FUNC_TYPES = (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef)
 _stdlib_parse_format = string.Formatter().parse
 
 
+fix_import_removals = bool(os.environ.get("pyupgrade_fix_import_removals", None))
+fix_fstrings_multiline = bool(os.environ.get("pyupgrade_fix_fstrings_multiline", None))
+
+
+
 def parse_format(s: str) -> Tuple[DotFormatPart, ...]:
     """Makes the empty string not a special case.  In the stdlib, there's
     loss of information (the type) on the empty string.
@@ -417,10 +422,6 @@ def _build_import_removals() -> Dict[Version, Dict[str, Tuple[str, ...]]]:
 
 IMPORT_REMOVALS = _build_import_removals()
 
-
-fix_import_removals = bool(os.environ.get("pyupgrade_fix_import_removals", None))
-
-
 def _fix_import_removals(
         tokens: List[Token],
         start: int,
@@ -542,6 +543,8 @@ def _format_params(call: ast.Call) -> Dict[str, str]:
 
 class FindPy36Plus(ast.NodeVisitor):
     def __init__(self) -> None:
+        # TODO: these could be moved to a more global scope along with
+        # the other module level things i have just to put it all in 1 place
         self.fix_fstrings = bool(os.environ.get("pyupgrade_fix_fstrings", None))
         self.fix_named_tuples = bool(os.environ.get("pyupgrade_fix_named_tuples", None))
         self.fix_dict_typed_dicts = bool(os.environ.get("pyupgrade_fix_dict_typed_dicts", None))
@@ -791,7 +794,7 @@ def _fix_py36_plus(contents_text: str) -> str:
             fmt_victims = victims(tokens, paren, node, gen=False)
             end = fmt_victims.ends[-1]
             # if it spans more than one line, bail
-            if tokens[end].line != token.line:
+            if not fix_fstrings_multiline and tokens[end].line != token.line:
                 continue
 
             tokens[i] = token._replace(src=_to_fstring(token.src, node))

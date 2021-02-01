@@ -1,5 +1,6 @@
 import ast
 import collections
+import os
 import pkgutil
 from typing import Callable
 from typing import Dict
@@ -118,9 +119,9 @@ def _import_plugins() -> None:
     plugins_path: str = _plugins.__path__  # type: ignore
     mod_infos = pkgutil.walk_packages(plugins_path, f'{_plugins.__name__}.')
     for _, name, _ in mod_infos:
-        __import__(name, fromlist=['_trash'])
+        lastname = name.split(".")[-1]
+        if bool(os.environ.get(f"pyupgrade_plugin_{lastname}", None)):
+            __import__(name, fromlist=['_trash'])
 
-import os
 
-if bool(os.environ.get("pyupgrade_plugins", None)):
-    _import_plugins()
+_import_plugins()

@@ -120,5 +120,7 @@ def _import_plugins() -> None:
     for _, name, _ in mod_infos:
         __import__(name, fromlist=['_trash'])
 
+import os
 
-_import_plugins()
+if bool(os.environ.get("pyupgrade_plugins", None)):
+    _import_plugins()

@@ -1,6 +1,7 @@
 import argparse
 import ast
 import collections
+import os
 import re
 import string
 import sys
@@ -417,11 +418,17 @@ def _build_import_removals() -> Dict[Version, Dict[str, Tuple[str, ...]]]:
 IMPORT_REMOVALS = _build_import_removals()
 
 
+fix_import_removals = bool(os.environ.get("pyupgrade_fix_import_removals", None))
+
+
 def _fix_import_removals(
         tokens: List[Token],
         start: int,
         min_version: Version,
 ) -> None:
+    if not fix_import_removals:
+        return
+
     i = start + 1
     name_parts = []
     while tokens[i].src != 'import':
@@ -535,6 +542,11 @@ def _format_params(call: ast.Call) -> Dict[str, str]:
 
 class FindPy36Plus(ast.NodeVisitor):
     def __init__(self) -> None:
+        self.fix_fstrings = bool(os.environ.get("pyupgrade_fix_fstrings", None))
+        self.fix_named_tuples = bool(os.environ.get("pyupgrade_fix_named_tuples", None))
+        self.fix_dict_typed_dicts = bool(os.environ.get("pyupgrade_fix_dict_typed_dicts", None))
+        self.fix_kw_typed_dicts = bool(os.environ.get("pyupgrade_fix_kw_typed_dicts", None))
+        self.fix_from_imports = bool(os.environ.get("pyupgrade_fix_from_imports", None))
         self.fstrings: Dict[Offset, ast.Call] = {}
         self.named_tuples: Dict[Offset, ast.Call] = {}
         self.dict_typed_dicts: Dict[Offset, ast.Call] = {}

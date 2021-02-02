@@ -47,8 +47,13 @@ _stdlib_parse_format = string.Formatter().parse
 
 
 fix_import_removals = bool(os.environ.get("pyupgrade_fix_import_removals", None))
+fix_fstrings = bool(os.environ.get("pyupgrade_fix_fstrings", None))
 fix_fstrings_multiline = bool(os.environ.get("pyupgrade_fix_fstrings_multiline", None))
 fix_fstrings_inline_strings = bool(os.environ.get("pyupgrade_fix_fstrings_inline_strings", None))
+fix_named_tuples = bool(os.environ.get("pyupgrade_fix_named_tuples", None))
+fix_dict_typed_dicts = bool(os.environ.get("pyupgrade_fix_dict_typed_dicts", None))
+fix_kw_typed_dicts = bool(os.environ.get("pyupgrade_fix_kw_typed_dicts", None))
+fix_from_imports = bool(os.environ.get("pyupgrade_fix_from_imports", None))
 
 
 def parse_format(s: str) -> Tuple[DotFormatPart, ...]:
@@ -550,13 +555,6 @@ def _format_params(call: ast.Call) -> Dict[str, str]:
 
 class FindPy36Plus(ast.NodeVisitor):
     def __init__(self) -> None:
-        # TODO: these could be moved to a more global scope along with
-        # the other module level things i have just to put it all in 1 place
-        self.fix_fstrings = bool(os.environ.get("pyupgrade_fix_fstrings", None))
-        self.fix_named_tuples = bool(os.environ.get("pyupgrade_fix_named_tuples", None))
-        self.fix_dict_typed_dicts = bool(os.environ.get("pyupgrade_fix_dict_typed_dicts", None))
-        self.fix_kw_typed_dicts = bool(os.environ.get("pyupgrade_fix_kw_typed_dicts", None))
-        self.fix_from_imports = bool(os.environ.get("pyupgrade_fix_from_imports", None))
         self.fstrings: Dict[Offset, ast.Call] = {}
         self.named_tuples: Dict[Offset, ast.Call] = {}
         self.dict_typed_dicts: Dict[Offset, ast.Call] = {}
@@ -566,13 +564,14 @@ class FindPy36Plus(ast.NodeVisitor):
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.level == 0 and node.module in {'typing', 'typing_extensions'}:
             for name in node.names:
-                if not name.asname:
+                if fix_from_imports and not name.asname:
                     self._from_imports[node.module].add(name.name)
         self.generic_visit(node)
 
     def _is_attr(self, node: ast.AST, mods: Set[str], name: str) -> bool:
         return (
             (
+                fix_from_imports and
                 isinstance(node, ast.Name) and
                 node.id == name and
                 any(name in self._from_imports[mod] for mod in mods)
@@ -628,7 +627,7 @@ class FindPy36Plus(ast.NodeVisitor):
                     if not candidate:
                         i += 1
             else:
-                if self.fix_fstrings:
+                if fix_fstrings:
                     self.fstrings[ast_to_offset(node)] = node
 
         self.generic_visit(node)
@@ -644,7 +643,7 @@ class FindPy36Plus(ast.NodeVisitor):
                 node.targets[0].id == node.value.args[0].s and
                 not has_starargs(node.value)
         ):
-            if (
+            if fix_named_tuples and (
                     self._is_attr(
                         node.value.func, {'typing'}, 'NamedTuple',
                     ) and
@@ -662,7 +661,7 @@ class FindPy36Plus(ast.NodeVisitor):
                     )
             ):
                 self.named_tuples[ast_to_offset(node)] = node.value
-            elif (
+            elif fix_kw_typed_dicts and (
                     self._is_attr(
                         node.value.func,
                         {'typing', 'typing_extensions'},
@@ -672,7 +671,7 @@ class FindPy36Plus(ast.NodeVisitor):
                     len(node.value.keywords) > 0
             ):
                 self.kw_typed_dicts[ast_to_offset(node)] = node.value
-            elif (
+            elif fix_dict_typed_dicts and (
                     self._is_attr(
                         node.value.func,
                         {'typing', 'typing_extensions'},

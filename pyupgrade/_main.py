@@ -628,7 +628,8 @@ class FindPy36Plus(ast.NodeVisitor):
                     if not candidate:
                         i += 1
             else:
-                self.fstrings[ast_to_offset(node)] = node
+                if self.fix_fstrings:
+                    self.fstrings[ast_to_offset(node)] = node
 
         self.generic_visit(node)
 

@@ -48,7 +48,7 @@ _stdlib_parse_format = string.Formatter().parse
 
 fix_import_removals = bool(os.environ.get("pyupgrade_fix_import_removals", None))
 fix_fstrings_multiline = bool(os.environ.get("pyupgrade_fix_fstrings_multiline", None))
-
+fix_fstrings_inline_strings = bool(os.environ.get("pyupgrade_fix_fstrings_inline_strings", None))
 
 
 def parse_format(s: str) -> Tuple[DotFormatPart, ...]:
@@ -68,6 +68,12 @@ def unparse_parsed_string(parsed: Sequence[DotFormatPart]) -> str:
         ret = ret.replace('{', '{{')
         ret = ret.replace('}', '}}')
         if field_name is not None:
+            if fix_fstrings_inline_strings and "'" in field_name:
+                # HACK: i... think this correctly inlines strings?
+                # This comes from _unparse's repr.
+                # I'd only use this with pyupgrade_fix_fstrings=1.
+                field_name = field_name.replace("'", "")
+                return ret + field_name
             ret += '{' + field_name
             if conversion:
                 ret += '!' + conversion
@@ -521,6 +527,7 @@ def _fix_tokens(contents_text: str, min_version: Version) -> str:
 def _simple_arg(arg: ast.expr) -> bool:
     return (
         isinstance(arg, ast.Name) or
+        (fix_fstrings_inline_strings and isinstance(arg, ast.Str)) or
         (isinstance(arg, ast.Attribute) and _simple_arg(arg.value)) or
         (
             isinstance(arg, ast.Call) and

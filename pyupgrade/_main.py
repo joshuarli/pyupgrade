@@ -530,7 +530,7 @@ def _fix_tokens(contents_text: str, min_version: Version) -> str:
 
 
 def _format_params(call: ast.Call) -> Set[str]:
-    params = {}
+    params = set()
     for i, arg in enumerate(call.args):
         params.add(str(i))
     for kwd in call.keywords:
@@ -800,7 +800,7 @@ def _fix_py36_plus(contents_text: str) -> str:
 
             args, end = parse_call_args(tokens, paren)
             # if it spans more than one line, bail
-            if not fix_fstrings_multiline tokens[end - 1].line != token.line:
+            if not fix_fstrings_multiline and tokens[end - 1].line != token.line:
                 continue
 
             args_src = tokens_to_src(tokens[paren:end])
